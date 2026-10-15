@@ -1,5 +1,5 @@
 import { ActivityCards } from "@/components/activities";
-import { Badge, DetailGrid, PageHeader, RelatedList, Tabs } from "@/components/chrome";
+import { Badge, DetailGrid, Lookup, PageHeader, RelatedList, Tabs } from "@/components/chrome";
 import { EditDialog } from "@/components/edit-dialog";
 import { HistoryList } from "@/components/history";
 import { ActivityForm, DeleteButton } from "@/components/record-actions";
@@ -9,7 +9,7 @@ import { accountFields, formValues } from "@/lib/field-defs";
 import { addressValues } from "@/lib/form-input";
 import { formatAddress, formatDateTime, formatMoney, formatNumber, formatTaxId, fullName } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import { accountName, assignableOwners, ownerName, stageName } from "@/lib/queries";
+import { accountName, assignableOwners, lookupHref, ownerName, stageName } from "@/lib/queries";
 import type { Account, DB, Profile } from "@/lib/types";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -42,7 +42,7 @@ export default async function AccountDetailPage({
           { label: "Telefone", value: account.phone || "—" },
           { label: "Tipo", value: account.type },
           { label: "Setor", value: account.industry || "—" },
-          { label: "Proprietário", value: ownerName(db, account.ownerId) },
+          { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", account.ownerId)}>{ownerName(db, account.ownerId)}</Lookup> },
         ]}
         actions={
           <>
@@ -86,8 +86,8 @@ export default async function AccountDetailPage({
             { label: "Telefone", value: account.phone || "—" },
             { label: "Receita anual", value: formatMoney(account.annualRevenue) },
             { label: "Funcionários", value: formatNumber(account.employeeCount) },
-            { label: "Conta pai", value: account.parentAccountId ? accountName(db, account.parentAccountId) : "—" },
-            { label: "Proprietário", value: ownerName(db, account.ownerId) },
+            { label: "Conta pai", value: <Lookup href={lookupHref(db, "account", account.parentAccountId)}>{account.parentAccountId ? accountName(db, account.parentAccountId) : "—"}</Lookup> },
+            { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", account.ownerId)}>{ownerName(db, account.ownerId)}</Lookup> },
             { label: "Cobrança", value: formatAddress(account.billingAddress) },
             { label: "Entrega", value: formatAddress(account.shippingAddress) },
             { label: "Observações", value: account.description || "—" },

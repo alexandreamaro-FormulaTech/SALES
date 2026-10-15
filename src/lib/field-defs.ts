@@ -122,8 +122,12 @@ export function contractFields(
   contacts: Option[],
   canActivate: boolean,
   currentStatus?: string,
+  catalog?: { name: string; isActive: boolean }[],
 ): FormField[] {
-  const statuses = CONTRACT_STATUSES.filter((status) => canActivate || status !== "Ativo" || status === currentStatus).map((status) => ({ value: status, label: status }));
+  const source = catalog?.length ? catalog : CONTRACT_STATUSES.map((name) => ({ name, isActive: name === "Ativo" }));
+  const statuses = source
+    .filter((status) => canActivate || !status.isActive || status.name === currentStatus)
+    .map((status) => ({ value: status.name, label: status.name }));
   return [
     { name: "name", label: "Título", type: "text", section: "Contrato", required: true, span: 2 },
     { name: "accountId", label: "Conta", type: "select", section: "Contrato", required: true, options: accounts },

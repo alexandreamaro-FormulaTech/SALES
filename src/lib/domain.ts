@@ -7,6 +7,7 @@ import type {
   Address,
   AuditChange,
   Contract,
+  ContractStage,
   ContractStatus,
   CrmObject,
   DB,
@@ -1006,6 +1007,23 @@ export function changeOpportunityStage(
   return done(next, { id: opportunity.id });
 }
 
+export function contractStage(db: DB, organizationId: string, name: string): ContractStage | null {
+  return db.contractStatuses.find((item) => item.organizationId === organizationId && item.name === name) ?? null;
+}
+
+export function isContractClosed(db: DB, contract: Pick<Contract, "organizationId" | "status">): boolean {
+  const stage = contractStage(db, contract.organizationId, contract.status);
+  if (stage) return stage.isClosed;
+  return contract.status === "Cancelado" || contract.status === "Expirado";
+}
+
+function stampContractStatus(contract: Contract, stage: ContractStage | null, status: ContractStatus, stamp: string) {
+  const signed = stage ? stage.isSigned || stage.isActive : status === "Assinado" || status === "Ativo";
+  const active = stage ? stage.isActive : status === "Ativo";
+  if (signed && !contract.signedAt) contract.signedAt = stamp;
+  if (active && !contract.activatedAt) contract.activatedAt = stamp;
+}
+
 function nextContractNumber(db: DB, organizationId: string): string {
   const year = new Date().getFullYear();
   const prefix = `CTR-${year}-`;
@@ -1039,7 +1057,9 @@ export function createContract(db: DB, actorId: string, input: ContractInput): M
   if (!actor) return fail(db, "Sessão inválida.");
   const problem = assertContractLinks(db, actor, input);
   if (problem) return fail(db, problem);
-  if (input.status === "Ativo" && !hasPermission(db, actor, "contract.activate")) {
+  const stage = contractStage(db, actor.organizationId, input.status);
+  const activates = stage ? stage.isActive : input.status === "Ativo";
+  if (activates && !hasPermission(db, actor, "contract.activate")) {
     return fail(db, "Sem permissão para ativar contratos.");
   }
   const ownerId = assignOwner(db, actor, "contract.create", input.ownerId, actor.id);
@@ -1062,8 +1082,8 @@ export function createContract(db: DB, actorId: string, input: ContractInput): M
     termMonths: input.termMonths,
     amount: input.amount,
     currencyCode: "BRL",
-    signedAt: input.status === "Assinado" || input.status === "Ativo" ? stamp : null,
-    activatedAt: input.status === "Ativo" ? stamp : null,
+    signedAt: null,
+    activatedAt: null,
     renewalNoticeDays: input.renewalNoticeDays,
     documentPath: input.documentPath.trim(),
     description: input.description.trim(),
@@ -1073,6 +1093,8 @@ export function createContract(db: DB, actorId: string, input: ContractInput): M
     updatedBy: actor.id,
     deletedAt: null,
   });
+  const created = next.contracts.find((item) => item.id === id)!;
+  stampContractStatus(created, stage, input.status, stamp);
   audit(next, actor, "create", "contract", id, [{ field: "registro", before: null, after: input.name.trim() }]);
   return done(next, { id });
 }
@@ -1083,12 +1105,14 @@ export function updateContract(db: DB, actorId: string, contractId: string, inpu
   const current = db.contracts.find((item) => item.id === contractId && !item.deletedAt);
   if (!current || current.organizationId !== actor.organizationId) return fail(db, "Contrato não encontrado.");
   if (!can(db, actor, "contract.update", current.ownerId)) return fail(db, "Sem permissão para editar este contrato.");
-  if (current.status === "Cancelado" || current.status === "Expirado") {
+  if (isContractClosed(db, current)) {
     return fail(db, "Contrato encerrado não pode ser alterado.");
   }
   const problem = assertContractLinks(db, actor, input);
   if (problem) return fail(db, problem);
-  if (input.status === "Ativo" && current.status !== "Ativo" && !hasPermission(db, actor, "contract.activate")) {
+  const stage = contractStage(db, actor.organizationId, input.status);
+  const activates = stage ? stage.isActive : input.status === "Ativo";
+  if (activates && current.status !== input.status && !hasPermission(db, actor, "contract.activate")) {
     return fail(db, "Sem permissão para ativar contratos.");
   }
   const ownerId = assignOwner(db, actor, "contract.update", input.ownerId, current.ownerId);
@@ -1114,10 +1138,39 @@ export function updateContract(db: DB, actorId: string, contractId: string, inpu
     updatedAt: stamp,
     updatedBy: actor.id,
   });
-  if ((input.status === "Assinado" || input.status === "Ativo") && !contract.signedAt) contract.signedAt = stamp;
-  if (input.status === "Ativo" && !contract.activatedAt) contract.activatedAt = stamp;
+  stampContractStatus(contract, stage, input.status, stamp);
   const changes = diffRecord(before, contract, TRACKED.contract);
   if (changes.length) audit(next, actor, "update", "contract", contract.id, changes);
+  return done(next, { id: contract.id });
+}
+
+export function changeContractStatus(
+  db: DB,
+  actorId: string,
+  contractId: string,
+  statusId: string,
+): Mutation<{ id: string }> {
+  const actor = actorOf(db, actorId);
+  if (!actor) return fail(db, "Sessão inválida.");
+  const current = db.contracts.find((item) => item.id === contractId && !item.deletedAt);
+  if (!current || current.organizationId !== actor.organizationId) return fail(db, "Contrato não encontrado.");
+  const target = db.contractStatuses.find((item) => item.id === statusId && item.organizationId === actor.organizationId);
+  if (!target) return fail(db, "Status inválido.");
+  if (isContractClosed(db, current)) return fail(db, "Contrato encerrado não pode ser alterado.");
+  if (!can(db, actor, "contract.update", current.ownerId)) return fail(db, "Sem permissão para alterar este contrato.");
+  if (target.isActive && current.status !== target.name && !hasPermission(db, actor, "contract.activate")) {
+    return fail(db, "Sem permissão para ativar contratos.");
+  }
+  if (current.status === target.name) return done(db, { id: current.id });
+  const next = clone(db);
+  const contract = next.contracts.find((item) => item.id === contractId)!;
+  const before = contract.status;
+  const stamp = now();
+  contract.status = target.name;
+  stampContractStatus(contract, target, target.name, stamp);
+  contract.updatedAt = stamp;
+  contract.updatedBy = actor.id;
+  audit(next, actor, "status_change", "contract", contract.id, [{ field: "status", before, after: target.name }]);
   return done(next, { id: contract.id });
 }
 
@@ -1310,6 +1363,7 @@ export function updatePipeline(
   input: {
     statuses: { id: string; guidanceText: string; sortOrder: number }[];
     stages: { id: string; guidanceText: string; sortOrder: number; defaultProbability: number }[];
+    contractStatuses?: { id: string; guidanceText: string; sortOrder: number }[];
   },
 ): Mutation<{ ok: true }> {
   const actor = actorOf(db, actorId);
@@ -1333,6 +1387,12 @@ export function updatePipeline(
     stage.guidanceText = item.guidanceText.trim();
     stage.sortOrder = item.sortOrder;
     stage.defaultProbability = item.defaultProbability;
+  }
+  for (const item of input.contractStatuses ?? []) {
+    const status = next.contractStatuses.find((row) => row.id === item.id && row.organizationId === actor.organizationId);
+    if (!status) return fail(db, "Status de contrato inválido.");
+    status.guidanceText = item.guidanceText.trim();
+    status.sortOrder = item.sortOrder;
   }
   audit(next, actor, "update", "pipeline", actor.organizationId, [{ field: "registro", before: null, after: "Funil atualizado" }]);
   return done(next, { ok: true });

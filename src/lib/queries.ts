@@ -51,6 +51,30 @@ export function accountName(db: DB, accountId: string | null): string {
   return db.accounts.find((account) => account.id === accountId)?.name ?? "—";
 }
 
+const DETAIL_PREFIX = {
+  account: "/crm/accounts",
+  contact: "/crm/contacts",
+  opportunity: "/crm/opportunities",
+  contract: "/crm/contracts",
+  user: "/crm/users",
+} as const;
+
+export type LookupKind = keyof typeof DETAIL_PREFIX;
+
+export function lookupHref(db: DB, kind: LookupKind, id: string | null | undefined): string | null {
+  if (!id) return null;
+  const exists = kind === "account"
+    ? db.accounts.some((item) => item.id === id && !item.deletedAt)
+    : kind === "contact"
+      ? db.contacts.some((item) => item.id === id && !item.deletedAt)
+      : kind === "opportunity"
+        ? db.opportunities.some((item) => item.id === id && !item.deletedAt)
+        : kind === "contract"
+          ? db.contracts.some((item) => item.id === id && !item.deletedAt)
+          : db.profiles.some((item) => item.id === id);
+  return exists ? `${DETAIL_PREFIX[kind]}/${id}` : null;
+}
+
 function visible<T extends { organizationId: string; ownerId: string; deletedAt: string | null }>(
   db: DB,
   user: Profile,

@@ -196,6 +196,73 @@ table.data a.row-link:hover { text-decoration: underline; }
 .header-user p { margin: 0; line-height: 1.15; }
 .header-user .name { font-weight: 700; }
 .header-user .role { color: #444; font-size: 11px; }
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  color: #444;
+  text-decoration: none;
+}
+.icon-btn:hover, .icon-btn.active { background: #f3f3f3; color: #0176d3; }
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  padding: 24px;
+  background: rgba(8, 7, 7, 0.48);
+}
+.settings-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  height: calc(100vh - 48px);
+  margin: 0 auto;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.settings-head {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 56px;
+  border-bottom: 1px solid #dddbda;
+  padding: 0 48px;
+}
+.settings-head h2 { margin: 0; font-size: 18px; font-weight: 400; }
+.settings-layout { display: flex; min-height: 0; flex: 1; }
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 200px;
+  flex: none;
+  padding: 12px 8px;
+  border-right: 1px solid #dddbda;
+  background: #f3f3f3;
+}
+.settings-nav a {
+  padding: 8px 12px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: #181818;
+  font-weight: 600;
+}
+.settings-nav a:hover { background: #e5e5e5; }
+.settings-nav a.active { background: white; color: #0176d3; }
+.settings-main { flex: 1; min-width: 0; overflow: auto; padding: 16px; background: #f3f3f3; }
+@media (max-width: 720px) {
+  .settings-backdrop { padding: 0; }
+  .settings-modal { width: 100%; height: 100%; border-radius: 0; }
+  .settings-layout { flex-direction: column; }
+  .settings-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid #dddbda; }
+  .settings-nav a { white-space: nowrap; }
+}
 .app-nav {
   display: flex;
   gap: 2px;
@@ -251,6 +318,8 @@ table.data a.row-link:hover { text-decoration: underline; }
 .highlights div { min-width: 120px; }
 .highlights dt { font-size: 12px; color: #444; }
 .highlights dd { margin: 0; font-size: 13px; color: #181818; }
+a.lookup { color: #0176d3; text-decoration: none; }
+a.lookup:hover { text-decoration: underline; }
 
 .list-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 8px; }
 .object-name { margin: 0; font-size: 12px; color: #444; }

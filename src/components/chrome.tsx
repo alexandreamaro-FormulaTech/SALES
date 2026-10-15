@@ -1,5 +1,11 @@
 import { cn, toneForLabel } from "@/lib/format";
+import Link from "next/link";
 import type { ReactNode } from "react";
+
+export function Lookup({ href, children }: { href?: string | null; children: ReactNode }) {
+  if (!href || children == null || children === "" || children === "—") return <>{children || "—"}</>;
+  return <Link className="lookup" href={href}>{children}</Link>;
+}
 
 function iconColor(eyebrow?: string) {
   const colors: Record<string, string> = {

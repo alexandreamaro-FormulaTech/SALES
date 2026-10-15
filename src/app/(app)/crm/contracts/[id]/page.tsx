@@ -1,17 +1,17 @@
 import { ActivityCards } from "@/components/activities";
-import { Badge, DetailGrid, PageHeader, RelatedList, Tabs } from "@/components/chrome";
+import { Badge, DetailGrid, Lookup, PageHeader, RelatedList, Tabs } from "@/components/chrome";
 import { EditDialog } from "@/components/edit-dialog";
 import { HistoryList } from "@/components/history";
+import { PathBar } from "@/components/path-bar";
 import { ActivityForm, DeleteButton } from "@/components/record-actions";
 import { RecordForm } from "@/components/record-form";
 import { requireContext } from "@/lib/context";
-import { renewalSoon } from "@/lib/domain";
+import { isContractClosed, renewalSoon } from "@/lib/domain";
 import { contractFields, formValues } from "@/lib/field-defs";
 import { formatDate, formatDateTime, formatMoney, fullName } from "@/lib/format";
 import { can, hasPermission } from "@/lib/permissions";
-import { accountName, assignableOwners, ownerName } from "@/lib/queries";
+import { accountName, assignableOwners, lookupHref, ownerName } from "@/lib/queries";
 import type { Contract, DB, Profile } from "@/lib/types";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export default async function ContractDetailPage({
@@ -26,7 +26,12 @@ export default async function ContractDetailPage({
   const { db, user } = await requireContext();
   const contract = db.contracts.find((item) => item.id === id && !item.deletedAt && item.organizationId === user.organizationId);
   if (!contract || !can(db, user, "contract.read", contract.ownerId)) notFound();
-  const writable = can(db, user, "contract.update", contract.ownerId) && contract.status !== "Cancelado" && contract.status !== "Expirado";
+  const closed = isContractClosed(db, contract);
+  const writable = can(db, user, "contract.update", contract.ownerId) && !closed;
+  const stages = db.contractStatuses
+    .filter((item) => item.organizationId === contract.organizationId)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const currentStage = stages.find((item) => item.name === contract.status);
   const signer = db.contacts.find((item) => item.id === contract.signerContactId);
   const opportunity = db.opportunities.find((item) => item.id === contract.opportunityId);
   const base = `/crm/contracts/${contract.id}`;
@@ -37,7 +42,7 @@ export default async function ContractDetailPage({
         title={contract.contractNumber}
         highlights={[
           { label: "Título", value: contract.name },
-          { label: "Conta", value: accountName(db, contract.accountId) },
+          { label: "Conta", value: <Lookup href={lookupHref(db, "account", contract.accountId)}>{accountName(db, contract.accountId)}</Lookup> },
           { label: "Status", value: contract.status },
           { label: "Valor", value: formatMoney(contract.amount) },
           { label: "Fim", value: formatDate(contract.endDate) },
@@ -63,6 +68,20 @@ export default async function ContractDetailPage({
           </>
         }
       />
+      <PathBar
+        mode="contract"
+        recordId={contract.id}
+        steps={stages.filter((item) => !item.isClosed).map((item) => ({ id: item.id, name: item.name, guidance: item.guidanceText }))}
+        currentId={currentStage?.id ?? ""}
+        outcomes={stages.filter((item) => item.isClosed).map((item) => ({ id: item.id, name: item.name, requiresReason: false, guidance: item.guidanceText }))}
+        locked={closed || !can(db, user, "contract.update", contract.ownerId)}
+        keyFields={[
+          { label: "Conta", value: accountName(db, contract.accountId) },
+          { label: "Valor", value: formatMoney(contract.amount) },
+          { label: "Início", value: formatDate(contract.startDate) },
+          { label: "Fim", value: formatDate(contract.endDate) },
+        ]}
+      />
       <Tabs current={tab} tabs={[
         { id: "details", label: "Detalhes", href: `${base}?tab=details` },
         { id: "related", label: "Relacionados", href: `${base}?tab=related` },
@@ -74,9 +93,9 @@ export default async function ContractDetailPage({
           <h2 className="section-title">Informações do contrato</h2>
           <DetailGrid items={[
             { label: "Título", value: contract.name },
-            { label: "Conta", value: <Link className="text-primary" href={`/crm/accounts/${contract.accountId}`}>{accountName(db, contract.accountId)}</Link> },
-            { label: "Oportunidade", value: opportunity ? <Link className="text-primary" href={`/crm/opportunities/${opportunity.id}`}>{opportunity.name}</Link> : "—" },
-            { label: "Assinante", value: signer ? fullName(signer.firstName, signer.lastName) : "—" },
+            { label: "Conta", value: <Lookup href={lookupHref(db, "account", contract.accountId)}>{accountName(db, contract.accountId)}</Lookup> },
+            { label: "Oportunidade", value: opportunity ? <Lookup href={lookupHref(db, "opportunity", opportunity.id)}>{opportunity.name}</Lookup> : "—" },
+            { label: "Assinante", value: signer ? <Lookup href={lookupHref(db, "contact", signer.id)}>{fullName(signer.firstName, signer.lastName)}</Lookup> : "—" },
             { label: "Valor", value: formatMoney(contract.amount, contract.currencyCode) },
             { label: "Início", value: formatDate(contract.startDate) },
             { label: "Fim", value: formatDate(contract.endDate) },
@@ -84,7 +103,7 @@ export default async function ContractDetailPage({
             { label: "Aviso de renovação", value: `${contract.renewalNoticeDays} dias` },
             { label: "Assinado em", value: formatDateTime(contract.signedAt) },
             { label: "Ativado em", value: formatDateTime(contract.activatedAt) },
-            { label: "Proprietário", value: ownerName(db, contract.ownerId) },
+            { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", contract.ownerId)}>{ownerName(db, contract.ownerId)}</Lookup> },
             { label: "Documento", value: contract.documentPath || "Nenhum arquivo registrado" },
             { label: "Observações", value: contract.description || "—" },
           ]} />
@@ -126,6 +145,10 @@ function contractEditFields(db: DB, user: Profile, contract: Contract) {
     contacts,
     hasPermission(db, user, "contract.activate"),
     contract.status,
+    db.contractStatuses
+      .filter((item) => item.organizationId === contract.organizationId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((item) => ({ name: item.name, isActive: item.isActive })),
   );
 }
 

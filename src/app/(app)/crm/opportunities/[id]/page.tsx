@@ -1,5 +1,5 @@
 import { ActivityCards } from "@/components/activities";
-import { Badge, DetailGrid, PageHeader, RelatedList, Tabs } from "@/components/chrome";
+import { Badge, DetailGrid, Lookup, PageHeader, RelatedList, Tabs } from "@/components/chrome";
 import { EditDialog } from "@/components/edit-dialog";
 import { HistoryList } from "@/components/history";
 import { PathBar } from "@/components/path-bar";
@@ -10,7 +10,7 @@ import { expectedRevenue } from "@/lib/domain";
 import { formValues, opportunityFields } from "@/lib/field-defs";
 import { formatDate, formatDateTime, formatMoney, fullName } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import { accountName, assignableOwners, ownerName } from "@/lib/queries";
+import { accountName, assignableOwners, lookupHref, ownerName } from "@/lib/queries";
 import type { DB, Opportunity, Profile } from "@/lib/types";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -44,11 +44,11 @@ export default async function OpportunityDetailPage({
         eyebrow="Oportunidade"
         title={opportunity.name}
         highlights={[
-          { label: "Conta", value: accountName(db, opportunity.accountId) },
+          { label: "Conta", value: <Lookup href={lookupHref(db, "account", opportunity.accountId)}>{accountName(db, opportunity.accountId)}</Lookup> },
           { label: "Valor", value: formatMoney(opportunity.amount) },
           { label: "Fechamento", value: formatDate(opportunity.closeDate) },
           { label: "Etapa", value: stage?.name ?? "—" },
-          { label: "Proprietário", value: ownerName(db, opportunity.ownerId) },
+          { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", opportunity.ownerId)}>{ownerName(db, opportunity.ownerId)}</Lookup> },
         ]}
         actions={
           <>
@@ -97,7 +97,8 @@ export default async function OpportunityDetailPage({
         <section className="card detail-card">
           <h2 className="section-title">Informações da oportunidade</h2>
           <DetailGrid items={[
-            { label: "Conta", value: <Link className="text-primary" href={`/crm/accounts/${opportunity.accountId}`}>{accountName(db, opportunity.accountId)}</Link> },
+            { label: "Conta", value: <Lookup href={lookupHref(db, "account", opportunity.accountId)}>{accountName(db, opportunity.accountId)}</Lookup> },
+            { label: "Contato principal", value: contact ? <Lookup href={lookupHref(db, "contact", contact.id)}>{fullName(contact.firstName, contact.lastName)}</Lookup> : "—" },
             { label: "Valor", value: formatMoney(opportunity.amount) },
             { label: "Receita prevista", value: formatMoney(expectedRevenue(opportunity)) },
             { label: "Probabilidade", value: `${opportunity.probability}%` },
@@ -107,7 +108,7 @@ export default async function OpportunityDetailPage({
             { label: "Origem", value: opportunity.leadSource || "—" },
             { label: "Próxima ação", value: opportunity.nextStep || "—" },
             { label: "Motivo da perda", value: opportunity.lossReason || "—" },
-            { label: "Proprietário", value: ownerName(db, opportunity.ownerId) },
+            { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", opportunity.ownerId)}>{ownerName(db, opportunity.ownerId)}</Lookup> },
             { label: "Contexto", value: opportunity.description || "—" },
             { label: "Atualizado em", value: formatDateTime(opportunity.updatedAt) },
           ]} />
@@ -115,9 +116,9 @@ export default async function OpportunityDetailPage({
       ) : null}
       {tab === "related" ? (
         <div className="grid gap-3 lg:grid-cols-2">
-          <RelatedList title="Contatos" rows={db.opportunityContacts.filter((item) => item.opportunityId === opportunity.id).map((link) => {
+          <RelatedList title="Contatos" rows={relatedContacts(db, opportunity).map((link) => {
             const person = db.contacts.find((item) => item.id === link.contactId);
-            return { href: `/crm/contacts/${link.contactId}`, title: person ? fullName(person.firstName, person.lastName) : "Contato", meta: link.role };
+            return { href: `/crm/contacts/${link.contactId}`, title: person ? fullName(person.firstName, person.lastName) : "Contato", meta: link.role || "Contato" };
           })} />
           <RelatedList title="Contratos" rows={contracts.map((item) => ({ href: `/crm/contracts/${item.id}`, title: item.contractNumber, meta: `${item.status} · ${formatMoney(item.amount)}` }))} />
         </div>
@@ -126,6 +127,21 @@ export default async function OpportunityDetailPage({
       {tab === "history" ? <HistoryList db={db} logs={db.auditLogs.filter((item) => item.objectType === "opportunity" && item.recordId === opportunity.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))} /> : null}
     </div>
   );
+}
+
+function relatedContacts(db: DB, opportunity: Opportunity) {
+  const links = db.opportunityContacts.filter((item) => item.opportunityId === opportunity.id);
+  if (opportunity.primaryContactId && !links.some((item) => item.contactId === opportunity.primaryContactId)) {
+    links.push({
+      id: opportunity.primaryContactId,
+      organizationId: opportunity.organizationId,
+      opportunityId: opportunity.id,
+      contactId: opportunity.primaryContactId,
+      role: "Contato principal",
+      isPrimary: true,
+    });
+  }
+  return links;
 }
 
 function opportunityEditFields(db: DB, user: Profile, opportunity: Opportunity) {

@@ -6,6 +6,7 @@ import { createClient, supabaseConfigured } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/context";
 import { commit, getDb, replaceDb } from "@/lib/db";
 import {
+  changeContractStatus,
   changeLeadStatus,
   changeOpportunityStage,
   convertLead,
@@ -190,6 +191,16 @@ export async function changeOpportunityStageAction(input: {
   return toState(result);
 }
 
+export async function changeContractStatusAction(input: { contractId: string; statusId: string }): Promise<ActionState> {
+  const { user } = await requireContext();
+  const result = await commit((db) => changeContractStatus(db, user.id, input.contractId, input.statusId));
+  if (result.ok) {
+    revalidatePath("/crm/contracts");
+    revalidatePath(`/crm/contracts/${input.contractId}`);
+  }
+  return toState(result);
+}
+
 export async function convertLeadAction(input: {
   leadId: string;
   accountMode: "create" | "link";
@@ -341,7 +352,12 @@ export async function savePipelineAction(_prev: ActionState, formData: FormData)
     sortOrder: Number(formData.get(`stage:${stage.id}:sortOrder`) ?? stage.sortOrder),
     defaultProbability: Number(formData.get(`stage:${stage.id}:probability`) ?? stage.defaultProbability),
   }));
-  const result = await commit((current) => updatePipeline(current, user.id, { statuses, stages }));
+  const contractStatuses = db.contractStatuses.map((status) => ({
+    id: status.id,
+    guidanceText: String(formData.get(`contract:${status.id}:guidance`) ?? ""),
+    sortOrder: Number(formData.get(`contract:${status.id}:sortOrder`) ?? status.sortOrder),
+  }));
+  const result = await commit((current) => updatePipeline(current, user.id, { statuses, stages, contractStatuses }));
   if (result.ok) revalidatePath("/admin/pipelines");
   return toState(result, result.ok ? "Funil atualizado." : "");
 }

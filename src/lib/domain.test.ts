@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  changeContractStatus,
   changeLeadStatus,
   changeOpportunityStage,
   convertLead,
@@ -80,6 +81,10 @@ describe("conversão de lead", () => {
     assert.equal(first.db.accounts.length, 1);
     assert.equal(first.db.contacts.length, 1);
     assert.equal(first.db.opportunities.length, 1);
+    assert.equal(first.db.opportunityContacts.length, 1);
+    assert.equal(first.db.opportunityContacts[0]?.opportunityId, first.result.data.opportunityId);
+    assert.equal(first.db.opportunityContacts[0]?.contactId, first.result.data.contactId);
+    assert.equal(first.db.opportunityContacts[0]?.isPrimary, true);
     const lead = first.db.leads.find((item) => item.id === leadId)!;
     assert.equal(lead.isConverted, true);
     assert.equal(lead.convertedAccountId, first.result.data.accountId);
@@ -320,5 +325,43 @@ describe("oportunidade e contrato", () => {
       description: "",
     });
     assert.equal(contract.result.ok, false);
+  });
+
+  it("avança o contrato pelo catálogo e impede ativação sem permissão", () => {
+    const account = createAccount(createBaseDb(), IDS.vendedor, accountInput());
+    assert.equal(account.result.ok, true);
+    if (!account.result.ok) return;
+    const created = createContract(account.db, IDS.vendedor, {
+      name: "Minuta",
+      accountId: account.result.data.id,
+      opportunityId: null,
+      signerContactId: null,
+      status: "Rascunho",
+      startDate: null,
+      endDate: null,
+      termMonths: null,
+      amount: 100,
+      renewalNoticeDays: 30,
+      documentPath: "",
+      description: "",
+    });
+    assert.equal(created.result.ok, true);
+    if (!created.result.ok) return;
+    const signed = changeContractStatus(created.db, IDS.vendedor, created.result.data.id, IDS.csAssinado);
+    assert.equal(signed.result.ok, true);
+    if (!signed.result.ok) return;
+    assert.equal(signed.db.contracts[0]?.status, "Assinado");
+    assert.ok(signed.db.contracts[0]?.signedAt);
+    const denied = changeContractStatus(signed.db, IDS.vendedor, created.result.data.id, IDS.csAtivo);
+    assert.equal(denied.result.ok, false);
+    const active = changeContractStatus(signed.db, IDS.admin, created.result.data.id, IDS.csAtivo);
+    assert.equal(active.result.ok, true);
+    if (!active.result.ok) return;
+    assert.equal(active.db.contracts[0]?.status, "Ativo");
+    assert.ok(active.db.contracts[0]?.activatedAt);
+    const expired = changeContractStatus(active.db, IDS.admin, created.result.data.id, IDS.csExpirado);
+    assert.equal(expired.result.ok, true);
+    if (!expired.result.ok) return;
+    assert.equal(changeContractStatus(expired.db, IDS.admin, created.result.data.id, IDS.csRascunho).result.ok, false);
   });
 });
