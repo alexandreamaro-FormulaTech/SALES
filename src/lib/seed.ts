@@ -71,6 +71,18 @@ function address(city: string, state: string, street: string): ReturnType<typeof
   return { ...emptyAddress(), street, number: "100", district: "Centro", city, state, postalCode: "01000-000", country: "Brasil" };
 }
 
+export function defaultContractStatuses(organizationId: string): DB["contractStatuses"] {
+  return [
+    { id: IDS.csRascunho, organizationId, name: "Rascunho", sortOrder: 1, isClosed: false, isSigned: false, isActive: false, guidanceText: "Minuta interna. Revise conta, valor e vigência antes de enviar." },
+    { id: IDS.csAprovacao, organizationId, name: "Em aprovação", sortOrder: 2, isClosed: false, isSigned: false, isActive: false, guidanceText: "Aguardando aprovação interna." },
+    { id: IDS.csEnviado, organizationId, name: "Enviado", sortOrder: 3, isClosed: false, isSigned: false, isActive: false, guidanceText: "Documento enviado ao cliente." },
+    { id: IDS.csAssinado, organizationId, name: "Assinado", sortOrder: 4, isClosed: false, isSigned: true, isActive: false, guidanceText: "Contrato assinado. A ativação formaliza a vigência." },
+    { id: IDS.csAtivo, organizationId, name: "Ativo", sortOrder: 5, isClosed: false, isSigned: true, isActive: true, guidanceText: "Contrato em vigência." },
+    { id: IDS.csExpirado, organizationId, name: "Expirado", sortOrder: 6, isClosed: true, isSigned: false, isActive: false, guidanceText: "Vigência encerrada." },
+    { id: IDS.csCancelado, organizationId, name: "Cancelado", sortOrder: 7, isClosed: true, isSigned: false, isActive: false, guidanceText: "Contrato cancelado. O histórico permanece." },
+  ];
+}
+
 export function createBaseDb(): DB {
   const permissions: Permission[] = PERMISSION_META.map((item, index) => ({
     id: `88888888-8888-4888-8888-${String(index + 1).padStart(12, "0")}`,
@@ -146,6 +158,7 @@ export function createBaseDb(): DB {
       { id: IDS.sgGanha, organizationId: IDS.org, name: "Fechada ganha", sortOrder: 5, isClosed: true, isWon: true, defaultProbability: 100, guidanceText: "Valor final e data definidos. Elegível a contrato." },
       { id: IDS.sgPerdida, organizationId: IDS.org, name: "Fechada perdida", sortOrder: 6, isClosed: true, isWon: false, defaultProbability: 0, guidanceText: "Motivo da perda obrigatório." },
     ],
+    contractStatuses: defaultContractStatuses(IDS.org),
     leads: [],
     accounts: [],
     contacts: [],
@@ -270,6 +283,8 @@ export function createSeed(): DB {
     { id: nid(62), organizationId: IDS.org, opportunityId: nid(22), contactId: nid(13), role: "Decisor", isPrimary: true },
     { id: nid(63), organizationId: IDS.org, opportunityId: nid(23), contactId: nid(14), role: "Decisor", isPrimary: true },
     { id: nid(64), organizationId: IDS.org, opportunityId: nid(26), contactId: nid(13), role: "Assinante", isPrimary: true },
+    { id: nid(65), organizationId: IDS.org, opportunityId: nid(24), contactId: nid(15), role: "Decisor", isPrimary: true },
+    { id: nid(66), organizationId: IDS.org, opportunityId: nid(25), contactId: nid(16), role: "Decisor", isPrimary: true },
   ];
   db.contracts = contracts;
   db.activities = activities;

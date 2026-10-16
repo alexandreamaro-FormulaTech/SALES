@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SCHEMA_VERSION } from "../ids";
+import { defaultContractStatuses } from "../seed";
 import type { Account, Activity, Address, AuditLog, Contact, Contract, DB, Lead, Opportunity, Profile } from "../types";
 import { emptyAddress } from "../types";
 import { createClient } from "./server";
@@ -97,6 +98,7 @@ function emptyDb(): DB {
     rolePermissions: [],
     leadStatuses: [],
     opportunityStages: [],
+    contractStatuses: [],
     leads: [],
     accounts: [],
     contacts: [],
@@ -111,7 +113,7 @@ function emptyDb(): DB {
 
 export async function loadSupabaseDb(): Promise<DB> {
   const supabase = await createClient();
-  const [organizations, profiles, roles, permissions, rolePermissions, leadStatuses, opportunityStages, leads, accounts, contacts, opportunities, opportunityContacts, contracts, activities, auditLogs, savedViews] = await Promise.all([
+  const [organizations, profiles, roles, permissions, rolePermissions, leadStatuses, opportunityStages, contractStatuses, leads, accounts, contacts, opportunities, opportunityContacts, contracts, activities, auditLogs, savedViews] = await Promise.all([
     readTable(supabase, "organizations"),
     readTable(supabase, "profiles"),
     readTable(supabase, "roles"),
@@ -119,6 +121,11 @@ export async function loadSupabaseDb(): Promise<DB> {
     readTable(supabase, "role_permissions"),
     readTable(supabase, "lead_statuses"),
     readTable(supabase, "opportunity_stages"),
+    readTable(supabase, "contract_statuses").catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("contract_statuses")) return [] as Row[];
+      throw error;
+    }),
     readTable(supabase, "leads"),
     readTable(supabase, "accounts"),
     readTable(supabase, "contacts"),
@@ -190,6 +197,19 @@ export async function loadSupabaseDb(): Promise<DB> {
     defaultProbability: numberOrNull(row, "default_probability") ?? 0,
     guidanceText: text(row, "guidance_text"),
   }));
+  db.contractStatuses = contractStatuses.map((row) => ({
+    id: text(row, "id"),
+    organizationId: text(row, "organization_id"),
+    name: text(row, "name") as DB["contractStatuses"][number]["name"],
+    sortOrder: numberOrNull(row, "sort_order") ?? 0,
+    isClosed: flag(row, "is_closed"),
+    isSigned: flag(row, "is_signed"),
+    isActive: flag(row, "is_active"),
+    guidanceText: text(row, "guidance_text"),
+  }));
+  if (!db.contractStatuses.length && db.organization.id) {
+    db.contractStatuses = defaultContractStatuses(db.organization.id);
+  }
   db.leads = leads.map((row) => ({
     ...stamp(row),
     id: text(row, "id"),
@@ -380,6 +400,7 @@ export async function saveSupabaseDb(before: DB, after: DB) {
   await applyTable(supabase, "profiles", before.profiles.map(profileRow), after.profiles.map(profileRow));
   await applyTable(supabase, "lead_statuses", before.leadStatuses.map(statusRow), after.leadStatuses.map(statusRow));
   await applyTable(supabase, "opportunity_stages", before.opportunityStages.map(stageRow), after.opportunityStages.map(stageRow));
+  await applyTable(supabase, "contract_statuses", before.contractStatuses.map(contractStatusRow), after.contractStatuses.map(contractStatusRow));
   await applyTable(supabase, "accounts", before.accounts.map(accountRow), after.accounts.map(accountRow));
   await applyTable(supabase, "contacts", before.contacts.map(contactRow), after.contacts.map(contactRow));
   await applyTable(supabase, "opportunities", before.opportunities.map(opportunityRow), after.opportunities.map(opportunityRow));
@@ -422,6 +443,9 @@ function statusRow(status: DB["leadStatuses"][number]): Row {
 }
 function stageRow(stage: DB["opportunityStages"][number]): Row {
   return { id: stage.id, organization_id: stage.organizationId, name: stage.name, sort_order: stage.sortOrder, is_closed: stage.isClosed, is_won: stage.isWon, default_probability: stage.defaultProbability, guidance_text: stage.guidanceText };
+}
+function contractStatusRow(status: DB["contractStatuses"][number]): Row {
+  return { id: status.id, organization_id: status.organizationId, name: status.name, sort_order: status.sortOrder, is_closed: status.isClosed, is_signed: status.isSigned, is_active: status.isActive, guidance_text: status.guidanceText };
 }
 function accountRow(account: Account): Row {
   return { id: account.id, ...stampColumns(account), name: account.name, legal_name: account.legalName, tax_id: account.taxId, type: account.type, industry: account.industry, website: account.website, phone: account.phone, annual_revenue: account.annualRevenue, employee_count: account.employeeCount, parent_account_id: account.parentAccountId, ...addressColumns(account.billingAddress, "billing"), ...addressColumns(account.shippingAddress, "shipping"), source_lead_id: account.sourceLeadId, description: account.description };

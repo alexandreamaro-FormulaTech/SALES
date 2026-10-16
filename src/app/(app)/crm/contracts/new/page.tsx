@@ -17,7 +17,18 @@ export default async function NewContractPage({ searchParams }: { searchParams: 
   const opportunities = db.opportunities.filter((item) => !item.deletedAt).map((item) => ({ value: item.id, label: item.name, accountId: item.accountId }));
   const contacts = db.contacts.filter((contact) => !contact.deletedAt).map((contact) => ({ value: contact.id, label: fullName(contact.firstName, contact.lastName), accountId: contact.accountId }));
   const opportunity = db.opportunities.find((item) => item.id === query.opportunityId);
-  const fields = contractFields(owners, accounts, opportunities, contacts, hasPermission(db, user, "contract.activate"));
+  const fields = contractFields(
+    owners,
+    accounts,
+    opportunities,
+    contacts,
+    hasPermission(db, user, "contract.activate"),
+    undefined,
+    [...db.contractStatuses]
+      .filter((item) => item.organizationId === user.organizationId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((item) => ({ name: item.name, isActive: item.isActive })),
+  );
   return (
     <div>
       <PageHeader title="Novo contrato" description="O número é gerado automaticamente. A oportunidade, se houver, precisa ser da mesma conta." />

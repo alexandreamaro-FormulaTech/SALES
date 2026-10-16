@@ -3,7 +3,7 @@ import "server-only";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import path from "path";
 import { SCHEMA_VERSION } from "./ids";
-import { createSeed } from "./seed";
+import { createSeed, defaultContractStatuses } from "./seed";
 import { supabaseConfigured } from "./supabase/server";
 import { loadSupabaseDb, saveSupabaseDb } from "./supabase/store";
 import type { DB, DomainResult } from "./types";
@@ -45,6 +45,12 @@ async function load(): Promise<DB> {
     const raw = await readFile(FILE, "utf8");
     const parsed = JSON.parse(raw) as DB;
     if (parsed.schemaVersion !== SCHEMA_VERSION) throw new Error("schema");
+    if (!parsed.contractStatuses?.length) {
+      parsed.contractStatuses = defaultContractStatuses(parsed.organization.id);
+      current.cache = parsed;
+      await persist(parsed);
+      return parsed;
+    }
     current.cache = parsed;
     return parsed;
   } catch {

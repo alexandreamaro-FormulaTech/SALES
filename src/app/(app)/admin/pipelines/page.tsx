@@ -28,6 +28,13 @@ export default async function PipelinesPage() {
           closed: stage.isClosed,
           defaultProbability: stage.defaultProbability,
         }))}
+        contractStatuses={[...db.contractStatuses].sort((a, b) => a.sortOrder - b.sortOrder).map((status) => ({
+          id: status.id,
+          name: status.name,
+          sortOrder: status.sortOrder,
+          guidanceText: status.guidanceText,
+          closed: status.isClosed,
+        }))}
       />
     </div>
   );

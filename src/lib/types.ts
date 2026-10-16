@@ -139,6 +139,17 @@ export type OpportunityStage = {
   guidanceText: string;
 };
 
+export type ContractStage = {
+  id: string;
+  organizationId: string;
+  name: ContractStatus;
+  sortOrder: number;
+  isClosed: boolean;
+  isSigned: boolean;
+  isActive: boolean;
+  guidanceText: string;
+};
+
 type AuditStamp = {
   organizationId: string;
   ownerId: string;
@@ -312,6 +323,7 @@ export type DB = {
   rolePermissions: RolePermission[];
   leadStatuses: LeadStatus[];
   opportunityStages: OpportunityStage[];
+  contractStatuses: ContractStage[];
   leads: Lead[];
   accounts: Account[];
   contacts: Contact[];

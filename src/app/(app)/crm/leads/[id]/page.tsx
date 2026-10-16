@@ -1,5 +1,5 @@
 import { ActivityCards } from "@/components/activities";
-import { Badge, DetailGrid, PageHeader, RelatedList, Tabs } from "@/components/chrome";
+import { Badge, DetailGrid, Lookup, PageHeader, RelatedList, Tabs } from "@/components/chrome";
 import { ConvertModal } from "@/components/convert-modal";
 import { EditDialog } from "@/components/edit-dialog";
 import { HistoryList } from "@/components/history";
@@ -12,7 +12,7 @@ import { formValues, leadFields } from "@/lib/field-defs";
 import { addressValues } from "@/lib/form-input";
 import { formatAddress, formatDateTime, formatMoney, formatNumber, fullName } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import { accountName, assignableOwners, ownerName } from "@/lib/queries";
+import { accountName, assignableOwners, lookupHref, ownerName } from "@/lib/queries";
 import type { DB, Lead, Profile } from "@/lib/types";
 import { notFound } from "next/navigation";
 
@@ -54,7 +54,7 @@ export default async function LeadDetailPage({
           { label: "Empresa", value: lead.company },
           { label: "Telefone", value: lead.phone || lead.mobile || "—" },
           { label: "Email", value: lead.email || "—" },
-          { label: "Proprietário", value: ownerName(db, lead.ownerId) },
+          { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", lead.ownerId)}>{ownerName(db, lead.ownerId)}</Lookup> },
           { label: "Status", value: status?.name ?? "—" },
         ]}
         actions={
@@ -147,7 +147,7 @@ function detailItems(db: DB, lead: Lead) {
     { label: "Setor", value: lead.industry || "—" },
     { label: "Receita anual", value: formatMoney(lead.annualRevenue) },
     { label: "Funcionários", value: formatNumber(lead.employeeCount) },
-    { label: "Proprietário", value: ownerName(db, lead.ownerId) },
+    { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", lead.ownerId)}>{ownerName(db, lead.ownerId)}</Lookup> },
     { label: "Endereço", value: formatAddress(lead.address) },
     { label: "Observações", value: lead.description || "—" },
     { label: "Qualificação", value: lead.qualificationNotes || "—" },
@@ -176,9 +176,10 @@ function leadEditValues(db: DB, user: Profile, lead: Lead) {
 }
 
 function Related({ lead, db }: { lead: Lead; db: DB }) {
+  const contact = db.contacts.find((item) => item.id === lead.convertedContactId);
   const rows = [
     lead.convertedAccountId ? { href: `/crm/accounts/${lead.convertedAccountId}`, title: accountName(db, lead.convertedAccountId), meta: "Conta resultante" } : null,
-    lead.convertedContactId ? { href: `/crm/contacts/${lead.convertedContactId}`, title: "Contato resultante", meta: "Aberto a partir deste lead" } : null,
+    lead.convertedContactId ? { href: `/crm/contacts/${lead.convertedContactId}`, title: contact ? fullName(contact.firstName, contact.lastName) : "Contato resultante", meta: "Aberto a partir deste lead" } : null,
     lead.convertedOpportunityId ? { href: `/crm/opportunities/${lead.convertedOpportunityId}`, title: db.opportunities.find((item) => item.id === lead.convertedOpportunityId)?.name ?? "Oportunidade", meta: "Oportunidade da conversão" } : null,
   ].filter((item): item is { href: string; title: string; meta: string } => Boolean(item));
   return <RelatedList title="Resultado da conversão" rows={rows} />;

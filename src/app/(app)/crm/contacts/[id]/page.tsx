@@ -1,5 +1,5 @@
 import { ActivityCards } from "@/components/activities";
-import { Badge, DetailGrid, PageHeader, RelatedList, Tabs } from "@/components/chrome";
+import { Badge, DetailGrid, Lookup, PageHeader, RelatedList, Tabs } from "@/components/chrome";
 import { EditDialog } from "@/components/edit-dialog";
 import { HistoryList } from "@/components/history";
 import { ActivityForm, DeleteButton } from "@/components/record-actions";
@@ -9,10 +9,9 @@ import { contactFields, formValues } from "@/lib/field-defs";
 import { addressValues } from "@/lib/form-input";
 import { formatAddress, formatDateTime, fullName } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import { accountName, assignableOwners, ownerName, stageName } from "@/lib/queries";
+import { accountName, assignableOwners, lookupHref, ownerName, stageName } from "@/lib/queries";
 import type { Contact, DB, Profile } from "@/lib/types";
 import { formatMoney } from "@/lib/format";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export default async function ContactDetailPage({
@@ -29,6 +28,7 @@ export default async function ContactDetailPage({
   if (!contact || !can(db, user, "contact.read", contact.ownerId)) notFound();
   const writable = can(db, user, "contact.update", contact.ownerId);
   const opportunities = db.opportunities.filter((item) => !item.deletedAt && (item.primaryContactId === contact.id || db.opportunityContacts.some((link) => link.opportunityId === item.id && link.contactId === contact.id)));
+  const manager = db.contacts.find((item) => item.id === contact.reportsToContactId && !item.deletedAt);
   const base = `/crm/contacts/${contact.id}`;
   const name = fullName(contact.firstName, contact.lastName);
   return (
@@ -37,7 +37,7 @@ export default async function ContactDetailPage({
         eyebrow="Contato"
         title={name}
         highlights={[
-          { label: "Conta", value: accountName(db, contact.accountId) },
+          { label: "Conta", value: <Lookup href={lookupHref(db, "account", contact.accountId)}>{accountName(db, contact.accountId)}</Lookup> },
           { label: "Cargo", value: contact.title || "—" },
           { label: "Email", value: contact.email || "—" },
           { label: "Telefone", value: contact.phone || contact.mobile || "—" },
@@ -75,14 +75,15 @@ export default async function ContactDetailPage({
           <h2 className="section-title">Informações do contato</h2>
           <DetailGrid items={[
             { label: "Nome", value: name },
-            { label: "Conta", value: <Link className="text-primary" href={`/crm/accounts/${contact.accountId}`}>{accountName(db, contact.accountId)}</Link> },
+            { label: "Conta", value: <Lookup href={lookupHref(db, "account", contact.accountId)}>{accountName(db, contact.accountId)}</Lookup> },
+            { label: "Reporta-se a", value: manager ? <Lookup href={lookupHref(db, "contact", manager.id)}>{fullName(manager.firstName, manager.lastName)}</Lookup> : "—" },
             { label: "Cargo", value: contact.title || "—" },
             { label: "Departamento", value: contact.department || "—" },
             { label: "Email", value: contact.email || "—" },
             { label: "Telefone", value: contact.phone || "—" },
             { label: "Celular", value: contact.mobile || "—" },
             { label: "Origem", value: contact.leadSource || "—" },
-            { label: "Proprietário", value: ownerName(db, contact.ownerId) },
+            { label: "Proprietário", value: <Lookup href={lookupHref(db, "user", contact.ownerId)}>{ownerName(db, contact.ownerId)}</Lookup> },
             { label: "Endereço", value: formatAddress(contact.mailingAddress) },
             { label: "Observações", value: contact.description || "—" },
             { label: "Criado em", value: formatDateTime(contact.createdAt) },

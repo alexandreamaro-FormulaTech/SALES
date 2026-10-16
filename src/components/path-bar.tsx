@@ -1,6 +1,6 @@
 "use client";
 
-import { changeLeadStatusAction, changeOpportunityStageAction } from "@/app/actions";
+import { changeContractStatusAction, changeLeadStatusAction, changeOpportunityStageAction } from "@/app/actions";
 import { cn } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,7 +16,7 @@ export function PathBar({
   outcomes,
   locked,
 }: {
-  mode: "lead" | "opportunity";
+  mode: "lead" | "opportunity" | "contract";
   recordId: string;
   steps: Step[];
   currentId: string;
@@ -42,7 +42,9 @@ export function PathBar({
     setError("");
     const result = mode === "lead"
       ? await changeLeadStatusAction({ leadId: recordId, statusId, reason })
-      : await changeOpportunityStageAction({ opportunityId: recordId, stageId: statusId, lossReason: reason });
+      : mode === "contract"
+        ? await changeContractStatusAction({ contractId: recordId, statusId })
+        : await changeOpportunityStageAction({ opportunityId: recordId, stageId: statusId, lossReason: reason });
     setPending(false);
     if (!result.ok) {
       setError(result.error);
